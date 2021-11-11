@@ -9,6 +9,7 @@ from utils_drl import Agent
 from utils_env import MyEnv
 from utils_memory import Prioritized_ReplayMemory
 
+import matplotlib.pyplot as plt
 
 GAMMA = 0.99
 GLOBAL_SEED = 0
@@ -25,8 +26,8 @@ BATCH_SIZE = 32
 POLICY_UPDATE = 4
 TARGET_UPDATE = 10_000
 WARM_STEPS = 50_000
-MAX_STEPS = 50_000_000
-EVALUATE_FREQ = 100_000
+MAX_STEPS = 440_0000
+EVALUATE_FREQ = 50_000
 
 ALPHA = 0.6
 BELTA_START = 0.4
@@ -75,13 +76,14 @@ for step in progressive:
     memory.push(env.make_folded_state(obs_queue), action, reward, done)
 
     if step % POLICY_UPDATE == 0 and training:
-        agent.learn(memory, BATCH_SIZE, ALPHA)
+        agent.learn(memory, BATCH_SIZE)
 
     if step % TARGET_UPDATE == 0:
         agent.sync()
 
     if step % EVALUATE_FREQ == 0:
         avg_reward, frames = env.evaluate(obs_queue, agent, render=RENDER)
+
         with open("rewards.txt", "a") as fp:
             fp.write(f"{step//EVALUATE_FREQ:3d} {step:8d} {avg_reward:.1f}\n")
         if RENDER:
