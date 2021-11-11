@@ -1,15 +1,16 @@
-import numpy
+import numpy as np
+import torch
 
 # SumTree
 # a binary tree data structure where the parent’s value is the sum of its children
 class SumTree:
     def __init__(self, capacity):
         self.capacity = capacity
-        self.tree = numpy.zeros(2 * capacity - 1)
+        self.tree = np.zeros(2 * capacity - 1)
 
     # update to the root node
     def _propagate(self, idx, change):
-        parent = (idx - 1) // 2
+        parent = torch.div((idx - 1), 2, rounding_mode='floor')
 
         self.tree[parent] += change
 
@@ -53,6 +54,8 @@ class SumTree:
 
     # get max priority
     def max(self):
-        start_idx = self.capacity - 1
-        return self.tree[start_idx:].max()
-
+        return np.max(self.tree[- self.capacity:])
+    
+    # get min priority
+    def min(self, size):
+        return np.min(self.tree[self.capacity - 1:self.capacity - 1 + size])    
