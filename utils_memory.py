@@ -18,14 +18,14 @@ from utils_types import (
     TorchDevice,
 )
 
-
 class Prioritized_ReplayMemory(object):
     def __init__(
             self,
             channels: int,
             capacity: int,
             alpha   : float,
-            device: TorchDevice
+            device: TorchDevice,
+            full_sink: bool = True,
     ) -> None:
         self.__capacity = capacity
         self.__alpha = alpha
@@ -34,10 +34,12 @@ class Prioritized_ReplayMemory(object):
         self.__size = 0
         self.__pos = 0
 
-        self.__m_states = torch.zeros((capacity, channels, 84, 84), dtype=torch.uint8)
-        self.__m_actions = torch.zeros((capacity, 1), dtype=torch.long)
-        self.__m_rewards = torch.zeros((capacity, 1), dtype=torch.int8)
-        self.__m_dones = torch.zeros((capacity, 1), dtype=torch.bool)
+        sink = lambda x: x.to(device) if full_sink else x
+        self.__m_states = sink(torch.zeros(
+            (capacity, channels, 84, 84), dtype=torch.uint8))
+        self.__m_actions = sink(torch.zeros((capacity, 1), dtype=torch.long))
+        self.__m_rewards = sink(torch.zeros((capacity, 1), dtype=torch.int8))
+        self.__m_dones = sink(torch.zeros((capacity, 1), dtype=torch.bool))
         self.tree = SumTree(capacity)
 
     def push(
@@ -51,10 +53,11 @@ class Prioritized_ReplayMemory(object):
         self.__m_actions[self.__pos, 0] = action
         self.__m_rewards[self.__pos, 0] = reward
         self.__m_dones[self.__pos, 0] = done
-        max_priority = self.tree.max() if  self.__size else (1.0 ** self.__alpha)
+        max_priority = self.tree.max() if  self.__size else 1.0
         self.tree.add(max_priority, self.__pos)
         self.__pos = (self.__pos + 1) % self.__capacity
-        self.__size = max(self.__size, self.__pos)
+        self.__size += 1
+        self.__size = min(self.__size, self.__capacity)
 
 
     def sample(self, batch_size: int, beta: float) -> Tuple[
@@ -80,11 +83,10 @@ class Prioritized_ReplayMemory(object):
             
         probabilities = priorities / self.tree.total()
 
-        weights  = (self.__size * probabilities) ** (-beta)
-        weights /= weights.max()
-
-        indices =  torch.from_numpy(indices)
-        weights =  torch.from_numpy(weights, dtype=torch.float64)
+        min_prob = self.tree.min(self.__size) / self.tree.total()
+        weights  = np.power(probabilities / min_prob, -beta)
+        indices =  torch.tensor(indices)
+        weights =  torch.from_numpy(weights).to(self.__device).float()
 
         b_state = self.__m_states[indices, :4].to(self.__device).float()
         b_next = self.__m_states[indices, 1:].to(self.__device).float()
